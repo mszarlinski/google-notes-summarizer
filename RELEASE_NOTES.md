@@ -27,7 +27,7 @@ Add the ability to watch Google Drive folders for future summarization.
 
 - **Watch/unwatch folders** — Clock icon on folder rows toggles watched state
 - **Watched folders API** — CRUD endpoints at `/api/watched-folders` with auth
-- **Scheduler endpoint** — `/api/scheduler/watched-folders` lists all watched folders (API-key protected)
+- **Scheduler endpoint** — `/api/summaries/create` lists all watched folders (API-key protected)
 - **In-memory storage** — Repository-pattern store replaces Prisma/PostgreSQL so the app runs with zero infrastructure
 - **Session email** — `session.userEmail` now available for per-user data scoping
 
