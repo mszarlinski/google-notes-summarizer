@@ -6,7 +6,7 @@ A Next.js application that connects to your Google account and lets you browse y
 
 - **Next.js 15** (App Router) — React UI + API routes in one project
 - **NextAuth.js v5** (Auth.js) — Google OAuth with Drive scopes
-- **Google APIs** — Drive v3 client for file listing
+- **Google APIs** — Drive v3 client for file listing and copying
 - **Tailwind CSS 4** — Styling
 - **TypeScript** — Throughout
 
@@ -21,9 +21,14 @@ app/
   api/
     auth/[...nextauth]/   NextAuth route handler
     drive/                API route: list Google Drive files
+    watched-folders/      API route: CRUD for watched folders
+    summaries/create/     API route: copy new files from watched folders
 lib/
   auth.ts                 NextAuth config (Google provider, scopes, callbacks)
-  google-drive.ts         Helper: create Drive API client from access token
+  google-drive.ts         Helper: create Drive API client from access/refresh token
+  token-store.ts          In-memory refresh token store (userId → token)
+  watched-folders-repo.ts In-memory watched folders repository
+  process-watched-folders.ts  Service: process watched folders and copy new files
 components/
   sign-in-button.tsx      Google sign-in button
   sign-out-button.tsx     Sign-out button
@@ -67,6 +72,7 @@ NEXTAUTH_URL=http://localhost:3000
 NEXTAUTH_SECRET=          # generate with: openssl rand -base64 32
 GOOGLE_CLIENT_ID=         # from Google Cloud Console
 GOOGLE_CLIENT_SECRET=     # from Google Cloud Console
+SCHEDULER_API_KEY=        # secret key for scheduler endpoint auth
 ```
 
 ### Run

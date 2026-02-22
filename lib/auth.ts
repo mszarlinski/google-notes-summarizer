@@ -1,5 +1,6 @@
 import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
+import { tokenStore } from "@/lib/token-store";
 
 declare module "next-auth" {
   interface Session {
@@ -23,7 +24,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       authorization: {
         params: {
           scope:
-            "openid email profile https://www.googleapis.com/auth/drive.readonly",
+            "openid email profile https://www.googleapis.com/auth/drive",
           access_type: "offline",
           prompt: "consent",
         },
@@ -46,6 +47,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (account) {
         token.accessToken = account.access_token;
         token.refreshToken = account.refresh_token;
+        if (token.email && account.refresh_token) {
+          tokenStore.set(token.email, account.refresh_token);
+        }
       }
       return token;
     },

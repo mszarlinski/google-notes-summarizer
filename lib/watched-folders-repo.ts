@@ -5,6 +5,7 @@ export interface WatchedFolder {
   folderName: string;
   createdAt: Date;
   updatedAt: Date;
+  lastProcessedAt: Date | null;
 }
 
 export interface WatchedFoldersRepo {
@@ -12,6 +13,7 @@ export interface WatchedFoldersRepo {
   listAll(): Promise<WatchedFolder[]>;
   add(userId: string, folderId: string, folderName: string): Promise<WatchedFolder>;
   remove(userId: string, folderId: string): Promise<void>;
+  updateLastProcessed(userId: string, folderId: string): Promise<void>;
 }
 
 class InMemoryWatchedFoldersRepo implements WatchedFoldersRepo {
@@ -49,6 +51,7 @@ class InMemoryWatchedFoldersRepo implements WatchedFoldersRepo {
       folderName,
       createdAt: now,
       updatedAt: now,
+      lastProcessedAt: null,
     };
     folders.push(folder);
     this.store.set(userId, folders);
@@ -61,6 +64,14 @@ class InMemoryWatchedFoldersRepo implements WatchedFoldersRepo {
       userId,
       folders.filter((f) => f.folderId !== folderId),
     );
+  }
+
+  async updateLastProcessed(userId: string, folderId: string): Promise<void> {
+    const folders = this.store.get(userId) ?? [];
+    const folder = folders.find((f) => f.folderId === folderId);
+    if (folder) {
+      folder.lastProcessedAt = new Date();
+    }
   }
 }
 
