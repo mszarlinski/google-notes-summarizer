@@ -4,6 +4,7 @@ import Google from "next-auth/providers/google";
 declare module "next-auth" {
   interface Session {
     accessToken?: string;
+    userEmail?: string;
   }
 }
 
@@ -50,6 +51,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
     session({ session, token }) {
       session.accessToken = token.accessToken;
+      session.userEmail = token.email ?? undefined;
       return session;
     },
   },
