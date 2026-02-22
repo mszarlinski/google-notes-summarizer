@@ -6,7 +6,7 @@ export function SignInButton() {
   return (
     <button
       onClick={() => signIn("google", { redirectTo: "/dashboard" })}
-      className="flex w-full items-center justify-center gap-3 rounded-lg border border-gray-300 bg-white px-6 py-3 font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 cursor-pointer"
+      className="flex w-full items-center justify-center gap-3 rounded-xl border border-gray-200 bg-white px-5 py-3 text-sm font-semibold text-gray-700 shadow-sm transition-all hover:border-gray-300 hover:shadow-md active:scale-[0.98] cursor-pointer"
     >
       <svg className="h-5 w-5" viewBox="0 0 24 24">
         <path
@@ -26,7 +26,7 @@ export function SignInButton() {
           fill="#EA4335"
         />
       </svg>
-      Sign in with Google
+      Continue with Google
     </button>
   );
 }
