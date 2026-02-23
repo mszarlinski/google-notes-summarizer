@@ -84,7 +84,7 @@ async function summariseNewFiles(
   drive: drive_v3.Drive,
   folder: WatchedFolder,
   summariesFolderId: string,
-): Promise<number> {
+): Promise<{ summariesGenerated: number; hasErrors: boolean }> {
   let query = `'${folder.folderId}' in parents AND trashed = false`;
   if (folder.lastProcessedAt) {
     query += ` AND createdTime > '${folder.lastProcessedAt.toISOString()}'`;
@@ -98,6 +98,7 @@ async function summariseNewFiles(
 
   const files = filesRes.data.files ?? [];
   let summariesGenerated = 0;
+  let hasErrors = false;
 
   for (const file of files) {
     try {
@@ -105,12 +106,13 @@ async function summariseNewFiles(
       const summary = await generateSummary(content);
       await createSummaryDoc(drive, file.name!, summary, summariesFolderId);
       summariesGenerated++;
-    } catch {
-      // Best-effort: skip files that fail
+    } catch (err) {
+      console.error(`Failed to summarise file "${file.name}":`, err);
+      hasErrors = true;
     }
   }
 
-  return summariesGenerated;
+  return { summariesGenerated, hasErrors };
 }
 
 export async function processWatchedFolders(): Promise<ProcessResult> {
@@ -150,8 +152,10 @@ export async function processWatchedFolders(): Promise<ProcessResult> {
 
     for (const folder of folders) {
       try {
-        const summariesGenerated = await summariseNewFiles(drive, folder, summariesFolderId);
-        await repo.updateLastProcessed(userId, folder.folderId);
+        const { summariesGenerated, hasErrors } = await summariseNewFiles(drive, folder, summariesFolderId);
+        if (!hasErrors) {
+          await repo.updateLastProcessed(userId, folder.folderId);
+        }
         processed.push({ userId, folderId: folder.folderId, summariesGenerated });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);

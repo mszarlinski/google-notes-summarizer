@@ -143,6 +143,25 @@ describe("processWatchedFolders", () => {
     expect(listCall.q).toContain(`createdTime > '${lastProcessed.toISOString()}'`);
   });
 
+  it("does not update lastProcessedAt when Gemini returns an error", async () => {
+    vi.mocked(repo.listAll).mockResolvedValue([makeWatchedFolder()]);
+
+    mockFilesList
+      .mockResolvedValueOnce({ data: { files: [{ id: SUMMARIES_FOLDER_ID }] } })
+      .mockResolvedValueOnce({
+        data: { files: [{ id: "file-1", name: "Meeting Notes" }] },
+      });
+    mockFilesExport.mockResolvedValue({ data: "Some notes content." });
+    mockGenerateContent.mockRejectedValue(new Error("429 Too Many Requests"));
+
+    const result = await processWatchedFolders();
+
+    expect(result.processed).toEqual([
+      { userId: USER, folderId: FOLDER_ID, summariesGenerated: 0 },
+    ]);
+    expect(repo.updateLastProcessed).not.toHaveBeenCalled();
+  });
+
   it("excludes trashed files from summarisation", async () => {
     vi.mocked(repo.listAll).mockResolvedValue([makeWatchedFolder()]);
 
