@@ -12,8 +12,10 @@ export async function GET() {
   try {
     const drive = getDriveClient(session.accessToken);
     const res = await drive.files.list({
-      pageSize: 20,
-      fields: "files(id, name, mimeType, modifiedTime)",
+      pageSize: 50,
+      q: "mimeType = 'application/vnd.google-apps.folder' and 'root' in parents and trashed = false",
+      fields: "files(id, name, modifiedTime)",
+      orderBy: "name",
     });
 
     return NextResponse.json({ files: res.data.files ?? [] });
