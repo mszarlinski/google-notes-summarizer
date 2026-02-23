@@ -1,5 +1,22 @@
 # Release Notes
 
+## v0.4.0 — AI Meeting Summaries (2026-02-23)
+
+Replace file copying with Gemini-powered meeting summaries. Each new Google Doc in a watched folder is exported, summarised by Gemini, and saved as a new Google Doc in the Summaries folder.
+
+### Features
+
+- **AI summarisation** — `POST /api/summaries/create` now generates structured meeting summaries (key decisions, action items, discussion points) instead of copying raw files
+- **Gemini 2.5 Flash** — Uses `gemini-2.5-flash` via the `@google/generative-ai` SDK
+- **Retry on failure** — If Gemini returns an error for any file, `lastProcessedAt` is not updated so the file is retried on the next run
+
+### Technical Details
+
+- `lib/gemini.ts` — Factory returning a configured `GenerativeModel` instance (requires `GEMINI_API_KEY`)
+- `lib/process-watched-folders.ts` — Replaced copy logic with `fetchFileContent` (Drive export as `text/plain`), `generateSummary` (Gemini), and `createSummaryDoc` (Drive multipart upload)
+- `ProcessedEntry` now reports `summariesGenerated` instead of `filesCopied`
+- Add `GEMINI_API_KEY` to `.env.local` — get one from https://aistudio.google.com/app/apikey
+
 ## v0.3.0 — Scheduler: Copy New Files from Watched Folders (2026-02-22)
 
 Process watched folders on a schedule: find files created since the last run and copy them to a root-level "Summaries" Drive folder.
