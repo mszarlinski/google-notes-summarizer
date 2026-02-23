@@ -1,12 +1,14 @@
 import { repo, WatchedFolder } from "@/lib/watched-folders-repo";
 import { tokenStore } from "@/lib/token-store";
 import { getDriveClientWithRefresh } from "@/lib/google-drive";
+import { getGeminiModel } from "@/lib/gemini";
 import { drive_v3 } from "googleapis";
+
 
 interface ProcessedEntry {
   userId: string;
   folderId: string;
-  filesCopied: number;
+  summariesGenerated: number;
 }
 
 interface ErrorEntry {
@@ -42,7 +44,43 @@ async function findOrCreateSummariesFolder(drive: drive_v3.Drive): Promise<strin
   return created.data.id!;
 }
 
-async function copyNewFiles(
+async function fetchFileContent(drive: drive_v3.Drive, fileId: string): Promise<string> {
+  const res = await drive.files.export(
+    { fileId, mimeType: "text/plain" },
+    { responseType: "text" },
+  );
+  return res.data as string;
+}
+
+async function generateSummary(content: string): Promise<string> {
+  const model = getGeminiModel();
+  const result = await model.generateContent(
+    `You are a meeting notes assistant. Generate a concise, structured meeting summary from the following notes. Include key decisions, action items, and main discussion points.\n\nNotes:\n${content}`,
+  );
+  return result.response.text();
+}
+
+async function createSummaryDoc(
+  drive: drive_v3.Drive,
+  fileName: string,
+  summary: string,
+  summariesFolderId: string,
+): Promise<void> {
+  await drive.files.create({
+    requestBody: {
+      name: `${fileName}-summary`,
+      mimeType: "application/vnd.google-apps.document",
+      parents: [summariesFolderId],
+    },
+    media: {
+      mimeType: "text/plain",
+      body: summary,
+    },
+    fields: "id",
+  });
+}
+
+async function summariseNewFiles(
   drive: drive_v3.Drive,
   folder: WatchedFolder,
   summariesFolderId: string,
@@ -59,20 +97,20 @@ async function copyNewFiles(
   });
 
   const files = filesRes.data.files ?? [];
-  let copied = 0;
+  let summariesGenerated = 0;
 
   for (const file of files) {
-    await drive.files.copy({
-      fileId: file.id!,
-      requestBody: {
-        name: `${file.name}-copy`,
-        parents: [summariesFolderId],
-      },
-    });
-    copied++;
+    try {
+      const content = await fetchFileContent(drive, file.id!);
+      const summary = await generateSummary(content);
+      await createSummaryDoc(drive, file.name!, summary, summariesFolderId);
+      summariesGenerated++;
+    } catch {
+      // Best-effort: skip files that fail
+    }
   }
 
-  return copied;
+  return summariesGenerated;
 }
 
 export async function processWatchedFolders(): Promise<ProcessResult> {
@@ -112,9 +150,9 @@ export async function processWatchedFolders(): Promise<ProcessResult> {
 
     for (const folder of folders) {
       try {
-        const filesCopied = await copyNewFiles(drive, folder, summariesFolderId);
+        const summariesGenerated = await summariseNewFiles(drive, folder, summariesFolderId);
         await repo.updateLastProcessed(userId, folder.folderId);
-        processed.push({ userId, folderId: folder.folderId, filesCopied });
+        processed.push({ userId, folderId: folder.folderId, summariesGenerated });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         errors.push({ userId, folderId: folder.folderId, error: message });

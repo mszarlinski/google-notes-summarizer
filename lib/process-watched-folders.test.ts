@@ -3,6 +3,7 @@ import { processWatchedFolders } from "./process-watched-folders";
 import { repo } from "./watched-folders-repo";
 import { tokenStore } from "./token-store";
 import { getDriveClientWithRefresh } from "./google-drive";
+import { getGeminiModel } from "./gemini";
 import type { WatchedFolder } from "./watched-folders-repo";
 
 vi.mock("./watched-folders-repo", () => ({
@@ -22,19 +23,25 @@ vi.mock("./google-drive", () => ({
   getDriveClientWithRefresh: vi.fn(),
 }));
 
+vi.mock("./gemini", () => ({
+  getGeminiModel: vi.fn(),
+}));
+
 const mockFilesList = vi.fn();
-const mockFilesCopy = vi.fn();
 const mockFilesCreate = vi.fn();
+const mockFilesExport = vi.fn();
 
 function makeDrive() {
   return {
     files: {
       list: mockFilesList,
-      copy: mockFilesCopy,
       create: mockFilesCreate,
+      export: mockFilesExport,
     },
   };
 }
+
+const mockGenerateContent = vi.fn();
 
 const USER = "user@example.com";
 const FOLDER_ID = "folder-123";
@@ -65,6 +72,13 @@ beforeEach(() => {
   vi.mocked(getDriveClientWithRefresh).mockReturnValue(makeDrive() as any);
   vi.mocked(tokenStore.get).mockReturnValue("refresh-token");
   vi.mocked(repo.updateLastProcessed).mockResolvedValue(undefined);
+  vi.mocked(getGeminiModel).mockReturnValue({
+    generateContent: mockGenerateContent,
+  } as any);
+  mockGenerateContent.mockResolvedValue({
+    response: { text: () => "Meeting summary." },
+  });
+  mockFilesCreate.mockResolvedValue({ data: { id: "new-doc-id" } });
 });
 
 describe("processWatchedFolders", () => {
@@ -76,34 +90,35 @@ describe("processWatchedFolders", () => {
     expect(result.processed).toEqual([]);
     expect(result.errors).toEqual([]);
     expect(getDriveClientWithRefresh).not.toHaveBeenCalled();
-    expect(mockFilesCopy).not.toHaveBeenCalled();
+    expect(mockGenerateContent).not.toHaveBeenCalled();
   });
 
-  it("copies a new file into the Summaries folder", async () => {
+  it("generates a summary doc for a new Google Doc file", async () => {
     vi.mocked(repo.listAll).mockResolvedValue([makeWatchedFolder()]);
 
-    // First call: find Summaries folder; second call: list files in watched folder
     mockFilesList
       .mockResolvedValueOnce({ data: { files: [{ id: SUMMARIES_FOLDER_ID }] } })
       .mockResolvedValueOnce({
         data: { files: [{ id: "file-1", name: "Meeting Notes" }] },
       });
-    mockFilesCopy.mockResolvedValue({});
+    mockFilesExport.mockResolvedValue({ data: "Raw meeting notes content." });
 
     const result = await processWatchedFolders();
 
     expect(result.processed).toEqual([
-      { userId: USER, folderId: FOLDER_ID, filesCopied: 1 },
+      { userId: USER, folderId: FOLDER_ID, summariesGenerated: 1 },
     ]);
     expect(result.errors).toEqual([]);
-    expect(mockFilesCopy).toHaveBeenCalledOnce();
-    expect(mockFilesCopy).toHaveBeenCalledWith({
-      fileId: "file-1",
-      requestBody: {
-        name: "Meeting Notes-copy",
-        parents: [SUMMARIES_FOLDER_ID],
-      },
-    });
+    expect(mockFilesExport).toHaveBeenCalledWith(
+      { fileId: "file-1", mimeType: "text/plain" },
+      { responseType: "text" },
+    );
+    expect(mockGenerateContent).toHaveBeenCalledOnce();
+    expect(mockFilesCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requestBody: expect.objectContaining({ name: "Meeting Notes-summary" }),
+      }),
+    );
   });
 
   it("skips already-processed files using lastProcessedAt filter", async () => {
@@ -112,7 +127,6 @@ describe("processWatchedFolders", () => {
       makeWatchedFolder({ lastProcessedAt: lastProcessed }),
     ]);
 
-    // First call: Summaries folder; second call: no new files (empty result)
     mockFilesList
       .mockResolvedValueOnce({ data: { files: [{ id: SUMMARIES_FOLDER_ID }] } })
       .mockResolvedValueOnce({ data: { files: [] } });
@@ -120,20 +134,18 @@ describe("processWatchedFolders", () => {
     const result = await processWatchedFolders();
 
     expect(result.processed).toEqual([
-      { userId: USER, folderId: FOLDER_ID, filesCopied: 0 },
+      { userId: USER, folderId: FOLDER_ID, summariesGenerated: 0 },
     ]);
-    expect(mockFilesCopy).not.toHaveBeenCalled();
+    expect(mockGenerateContent).not.toHaveBeenCalled();
 
     // Verify the query includes the createdTime filter
     const listCall = mockFilesList.mock.calls[1][0];
     expect(listCall.q).toContain(`createdTime > '${lastProcessed.toISOString()}'`);
   });
 
-  it("does not copy files that were deleted (trashed)", async () => {
+  it("excludes trashed files from summarisation", async () => {
     vi.mocked(repo.listAll).mockResolvedValue([makeWatchedFolder()]);
 
-    // First call: Summaries folder; second call: Drive returns no files
-    // (trashed files are excluded by the `trashed = false` query filter)
     mockFilesList
       .mockResolvedValueOnce({ data: { files: [{ id: SUMMARIES_FOLDER_ID }] } })
       .mockResolvedValueOnce({ data: { files: [] } });
@@ -141,9 +153,9 @@ describe("processWatchedFolders", () => {
     const result = await processWatchedFolders();
 
     expect(result.processed).toEqual([
-      { userId: USER, folderId: FOLDER_ID, filesCopied: 0 },
+      { userId: USER, folderId: FOLDER_ID, summariesGenerated: 0 },
     ]);
-    expect(mockFilesCopy).not.toHaveBeenCalled();
+    expect(mockGenerateContent).not.toHaveBeenCalled();
 
     // Verify the query includes trashed = false
     const listCall = mockFilesList.mock.calls[1][0];
