@@ -60,10 +60,10 @@ export default async function Dashboard() {
       <main className="mx-auto max-w-5xl px-6 py-10">
         <div className="mb-8">
           <h1 className="text-2xl font-bold tracking-tight text-gray-900">
-            Your Drive Files
+            Your Drive Folders
           </h1>
           <p className="mt-1 text-sm text-gray-500">
-            Recent files from your Google Drive
+            Top-level folders from your Google Drive
           </p>
         </div>
         <DriveFileList />
