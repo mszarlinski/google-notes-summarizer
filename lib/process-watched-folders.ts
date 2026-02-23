@@ -2,6 +2,7 @@ import { repo, WatchedFolder } from "@/lib/watched-folders-repo";
 import { tokenStore } from "@/lib/token-store";
 import { getDriveClientWithRefresh } from "@/lib/google-drive";
 import { getGeminiModel } from "@/lib/gemini";
+import { markdownToHtml } from "@/lib/markdown-to-html";
 import { drive_v3 } from "googleapis";
 
 
@@ -73,8 +74,8 @@ async function createSummaryDoc(
       parents: [summariesFolderId],
     },
     media: {
-      mimeType: "text/plain",
-      body: summary,
+      mimeType: "text/html",
+      body: markdownToHtml(summary),
     },
     fields: "id",
   });
